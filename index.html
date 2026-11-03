@@ -208,6 +208,12 @@ details.grp summary{cursor:pointer}details.grp .ritem{margin-top:8px}
 .topbar{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:4px 0 10px;border-bottom:1px solid var(--line);margin-bottom:6px}
 .topbar .brand{font-family:var(--f-display);font-weight:700;letter-spacing:-.01em}
 .topbar .hello{font-size:.95rem;color:var(--muted)}.topbar .hello b{color:var(--ink)}.topbar .sync{color:var(--good)}
+#termsmodal{position:fixed;inset:0;z-index:50;background:rgba(10,15,25,.6);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding-top:max(24px,env(safe-area-inset-top,0px));padding-bottom:24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.tm-card{background:var(--paper);color:var(--ink);border-radius:16px;max-width:620px;width:100%;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.tm-card h2{font-size:1.4rem}.terms{padding-left:20px;display:flex;flex-direction:column;gap:8px;font-size:.95rem;line-height:1.5}
+.legal{max-width:680px;margin:20px auto;line-height:1.6}.legal h1{font-size:2rem}.legal h3{margin-top:18px}
+#app .sel{-webkit-user-select:text;user-select:text}
+.ck.mk{margin-top:12px;font-weight:400;align-items:flex-start}
 @media (prefers-reduced-motion:reduce){ .qtimer i{transition:none} }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
@@ -1054,7 +1060,29 @@ const _vEstudiar=vEstudiar; vEstudiar=function(){ const ids=[...Object.keys(S.no
 const _reportQ=reportQ; reportQ=function(id){ if(!isFull(BYID[id])) BYID[id].q=BYID[id].q||''; _reportQ(id); };
 const _vHome2=vHome; vHome=function(){ if(!REQUIRE_LOGIN&&!BANK.length) return `<section class="hero"><h1>Tú Lo Sabes</h1><p class="lead">Esta copia no contiene el banco de preguntas. Entra en la versión oficial con tu cuenta.</p></section>`; return _vHome2(); };
 // tras iniciar sesión, cargar el índice del banco
-const _afterLoginOrig=_afterLogin; _afterLogin=async function(user){ await _afterLoginOrig(user); if(AUTH.ok){ await loadMeta(); if(S.cur&&S.cur.qs.some(q=>!q.opts)) hydrateCur(); render(); } };
+const TERMS_V='2026-11-03';
+const _afterLoginOrig=_afterLogin; _afterLogin=async function(user){ await _afterLoginOrig(user); if(!AUTH.ok) return;
+  const {data:pf}=await sbReady().from('profiles').select('terms_version').eq('id',user.id).maybeSingle();
+  if(!pf||pf.terms_version!==TERMS_V){ showTerms(true); return; }
+  await postTerms(); };
+async function postTerms(){ await loadMeta(); if(S.cur&&S.cur.qs.some(q=>!q.opts)) hydrateCur(); render(); }
+function termsHtml(){ return `<h2>Aviso de seguridad y condiciones de uso</h2>
+  <p class="sub">Versión ${TERMS_V}. Léelo antes de continuar.</p>
+  <ol class="terms">
+   <li><b>Acceso personal.</b> Tu cuenta es personal e intransferible. No compartas tu correo ni tu contraseña. Solo puede haber una sesión abierta: si entras desde otro dispositivo, la anterior se cierra.</li>
+   <li><b>Contenido protegido.</b> Las preguntas de elaboración propia, las explicaciones, los razonamientos y la organización del banco están protegidos como obra y como base de datos (Texto Refundido de la Ley de Propiedad Intelectual, en particular sus arts. 12 y 133 y siguientes). Las preguntas de exámenes oficiales se muestran con fines de estudio, indicando su origen.</li>
+   <li><b>Prohibido copiar o extraer.</b> No está permitido copiar, descargar, fotografiar de forma sistemática, reproducir ni redistribuir las preguntas, ni extraerlas mediante robots, scripts, extensiones o herramientas de inteligencia artificial.</li>
+   <li><b>Marca de agua y registro.</b> Cada pantalla muestra tu correo y la fecha. Para proteger el servicio registramos los inicios de sesión y el número de preguntas consultadas. Hay un límite diario de preguntas por cuenta.</li>
+   <li><b>Consecuencias.</b> El incumplimiento permite suspender o cancelar la cuenta sin reembolso y ejercer las acciones legales que correspondan.</li>
+   <li><b>Tus datos.</b> Tratamos tu correo, tu nombre y tu progreso de estudio únicamente para prestarte el servicio y proteger su contenido. Puedes pedir el acceso, la rectificación o la supresión de tus datos desde la sección Ayuda.</li>
+  </ol>`; }
+function showTerms(gate){ let m=document.getElementById('termsmodal'); if(!m){ m=document.createElement('div'); m.id='termsmodal'; document.body.appendChild(m); }
+  m.innerHTML=`<div class="tm-card">${termsHtml()}${gate?`<label class="ck"><input type="checkbox" id="tm_ok" onchange="document.getElementById('tm_b').disabled=!this.checked">He leído y acepto el aviso de seguridad y las condiciones de uso</label>
+   <div class="row"><button class="btn primary" id="tm_b" disabled onclick="acceptTerms()">Aceptar y continuar</button><button class="btn" onclick="document.getElementById('termsmodal').remove();logout()">No acepto</button></div>`:`<div class="row"><button class="btn primary" onclick="document.getElementById('termsmodal').remove()">Cerrar</button></div>`}</div>`; }
+async function acceptTerms(){ const b=document.getElementById('tm_b'); b.disabled=true; const sb=sbReady();
+  const {error}=await sb.from('profiles').update({terms_version:TERMS_V,terms_at:new Date().toISOString(),terms_ua:navigator.userAgent.slice(0,200)}).eq('id',AUTH.user.id);
+  if(error){ b.disabled=false; b.textContent="No se pudo guardar. Inténtalo de nuevo"; return; } document.getElementById('termsmodal').remove(); await postTerms(); }
+const _vSettings6=vSettings; vSettings=function(){ return _vSettings6()+`<section class="set"><h3>Aviso de seguridad y condiciones</h3><p class="sub">Aceptado en tu cuenta (versión ${TERMS_V}).</p><button class="btn" onclick="showTerms(false)">Leer de nuevo</button></section>`; };
 
 // ---------- disuasión de copia ----------
 (function(){
@@ -1076,6 +1104,43 @@ function vImpLocked(){ return `<h2 class="vt">Corrector e impugnaciones</h2>
   <button class="btn primary" onclick="ayudaPre='Quiero contratar el servicio de corrector e impugnaciones.';S.ayudaTipo='ayuda';go('ayuda')">Solicitar información</button></section>`; }
 const _render3=render; render=function(){ if(view==='impugnar'&&!hasFeat('impugnar')){ _render3(); $('#app').innerHTML=(AUTH.ok?topBar():'')+vImpLocked(); }else _render3();
   const nb=document.querySelector('#nav [data-v="impugnar"]'); if(nb) nb.hidden=!hasFeat('impugnar'); };
+
+// ---------- v9: soporte, datos de contacto, consentimiento de ofertas, privacidad ----------
+var SUPPORT_EMAIL_V='gbsmedeiros@gmail.com';
+// perfil de contacto: nombre, proveedor de acceso y última visita
+async function syncProfile(){ const sb=sbReady(); if(!sb||!AUTH.user) return; const m=AUTH.user.user_metadata||{}; const prov=(AUTH.user.app_metadata&&AUTH.user.app_metadata.provider)||'email';
+  const upd={nombre:(m.nombre||m.full_name||m.name||'').trim()||null,proveedor:prov,last_seen_at:new Date().toISOString()};
+  if(AUTH.pendingMkt!==undefined){ upd.marketing=!!AUTH.pendingMkt; upd.marketing_at=new Date().toISOString(); delete AUTH.pendingMkt; }
+  await sb.from('profiles').update(upd).eq('id',AUTH.user.id);
+  const {data}=await sb.from('profiles').select('marketing').eq('id',AUTH.user.id).maybeSingle(); AUTH.marketing=!!(data&&data.marketing); }
+const _postTerms0=postTerms; postTerms=async function(){ await syncProfile(); await _postTerms0(); };
+// en el aviso inicial: casilla opcional (desmarcada) de ofertas
+const _termsHtml0=termsHtml; termsHtml=function(){ return _termsHtml0()+`<label class="ck mk"><input type="checkbox" id="tm_mk"> Quiero recibir por correo ofertas, novedades y avisos de renovación de Tú Lo Sabes. Es opcional y puedo darme de baja cuando quiera en Ajustes.</label>`; };
+const _acceptTerms0=acceptTerms; acceptTerms=async function(){ const mk=document.getElementById('tm_mk'); if(mk) AUTH.pendingMkt=mk.checked; await _acceptTerms0(); };
+async function setMarketing(v){ const sb=sbReady(); await sb.from('profiles').update({marketing:v,marketing_at:new Date().toISOString()}).eq('id',AUTH.user.id); AUTH.marketing=v; render(); }
+const _vSettings7=vSettings; vSettings=function(){ return _vSettings7()+(AUTH.ok?`<section class="set"><h3>Comunicaciones</h3><label class="ck"><input type="checkbox" ${AUTH.marketing?'checked':''} onchange="setMarketing(this.checked)"> Recibir ofertas, novedades y avisos de renovación por correo</label><p class="sub">Los avisos sobre tu cuenta y tu suscripción se envían siempre. <button class="link" onclick="location.hash='privacidad'">Política de privacidad</button></p></section>`:''); };
+// soporte
+const _vAyuda0=vAyuda; vAyuda=function(){ return _vAyuda0().replace(/Envíalo a: <b>[\s\S]*?<\/b>/,`Envíalo a: <b class="sel">${SUPPORT_EMAIL_V}</b> <button class="link" onclick="navigator.clipboard&&navigator.clipboard.writeText('${SUPPORT_EMAIL_V}').then(()=>{this.textContent='copiado'})">copiar correo</button> · <a href="mailto:${SUPPORT_EMAIL_V}?subject=${encodeURIComponent('[Tú Lo Sabes] Soporte')}">abrir mi correo</a>`); };
+// política de privacidad pública (#privacidad)
+function vPrivacidad(){ return `<section class="legal"><p class="eyebrow">Tú Lo Sabes</p><h1>Política de privacidad</h1>
+ <p><b>Contacto:</b> <span class="sel">${SUPPORT_EMAIL_V}</span></p>
+ <h3>Qué datos tratamos</h3><p>Tu correo electrónico, tu nombre, el método de acceso (correo, Google o Facebook), tu progreso de estudio, la aceptación de las condiciones de uso y, si lo autorizas, tu consentimiento para recibir comunicaciones comerciales.</p>
+ <h3>Para qué</h3><ul><li>Prestarte el servicio: cuenta, sincronización del progreso y soporte (base: ejecución del contrato).</li><li>Proteger el contenido frente a copias y usos indebidos: sesión única, límites de uso y registro de accesos (base: interés legítimo).</li><li>Enviarte ofertas, novedades y avisos de renovación solo si marcas la casilla correspondiente (base: consentimiento, que puedes retirar en Ajustes en cualquier momento).</li></ul>
+ <h3>Cuánto tiempo</h3><p>Mientras tengas cuenta. Si la eliminas, borramos tus datos salvo los que la ley obligue a conservar.</p>
+ <h3>Con quién</h3><p>No vendemos tus datos. Los almacena nuestro proveedor de base de datos (Supabase). Si entras con Google o Facebook, ellos nos facilitan tu nombre y correo.</p>
+ <h3>Tus derechos</h3><p>Puedes pedir acceso, rectificación, supresión, oposición, limitación y portabilidad escribiendo a <span class="sel">${SUPPORT_EMAIL_V}</span>. También puedes reclamar ante la Agencia Española de Protección de Datos (aepd.es).</p>
+ <h3>Eliminación de datos</h3><p>Para borrar tu cuenta y tus datos, escribe a <span class="sel">${SUPPORT_EMAIL_V}</span> con el asunto «Eliminar mi cuenta» desde el correo con el que te registraste. Lo hacemos en un plazo máximo de 30 días.</p>
+ <p><a href="#" onclick="location.hash='';return false">Volver</a></p></section>`; }
+const _render6=render; render=function(){ if(location.hash==='#privacidad'){ $('#app').innerHTML=vPrivacidad(); $('#nav').hidden=true; return; } _render6(); };
+window.addEventListener('hashchange',()=>render());
+// enlace a la política en la pantalla de acceso
+const _vLogin0=vLogin; vLogin=function(){ return _vLogin0().replace('</section>',`<p class="sub fine"><a href="#privacidad">Política de privacidad</a> · Soporte: <span class="sel">${SUPPORT_EMAIL_V}</span></p></section>`); };
+// penalización: las dos reglas visibles en Inicio
+function penPick(v){ S.pen=v; save(); render(); }
+const _vHomePen=vHome; vHome=function(){ return _vHomePen().replace(/<p class="foot">Penalización activa:[\s\S]*?<\/p>/,`<section class="set pen"><h3>¿Cuánto resta cada error en tu examen?</h3><div class="ckl">
+ <label class="ck"><input type="radio" name="penh" ${Math.abs(S.pen-1/3)<1e-9?'checked':''} onchange="penPick(1/3)"> 1/3 de acierto <small>(Auxiliar del Estado)</small></label>
+ <label class="ck"><input type="radio" name="penh" ${S.pen===1?'checked':''} onchange="penPick(1)"> Una errada anula una acertada</label></div>
+ <p class="sub">Elige la regla de las bases de tu convocatoria. Se aplica a las notas de todos tus simulacros.</p></section>`); };
 
 render(); bootAuth();
 </script>
